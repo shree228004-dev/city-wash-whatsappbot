@@ -4,12 +4,12 @@ import os
 
 app = Flask(__name__)
 
-# ================== META CREDENTIALS (FROM ENV) ==================
+# ================== ENVIRONMENT VARIABLES ==================
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")  # MUST come from Render ENV
+VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 
-# ================== BOT MESSAGES ==================
+# ================== BOT RESPONSES ==================
 CITY_WASH = {
     "welcome": (
         "👋 Welcome to *City Wash Laundry Services*!\n\n"
@@ -45,7 +45,7 @@ def home():
     return "City Wash WhatsApp Bot is running ✅", 200
 
 
-# ================== SEND MESSAGE ==================
+# ================== SEND WHATSAPP MESSAGE ==================
 def send_message(to, text):
     url = f"https://graph.facebook.com/v19.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -64,7 +64,7 @@ def send_message(to, text):
     print("SEND MESSAGE RESPONSE:", response.text)
 
 
-# ================== WEBHOOK VERIFICATION ==================
+# ================== WEBHOOK VERIFICATION (META) ==================
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
     mode = request.args.get("hub.mode")
@@ -80,10 +80,10 @@ def verify_webhook():
     return "Forbidden", 403
 
 
-# ================== WEBHOOK MESSAGE HANDLER ==================
+# ================== RECEIVE WHATSAPP MESSAGES ==================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
+    data = request.get_json()
     print("FULL WEBHOOK DATA:", data)
 
     try:
@@ -96,6 +96,11 @@ def webhook():
             return "ok", 200
 
         message = value["messages"][0]
+
+        # Ignore non-text messages
+        if "text" not in message:
+            return "ok", 200
+
         user_text = message["text"]["body"].lower()
         user_number = message["from"]
 
@@ -118,7 +123,7 @@ def webhook():
     return "ok", 200
 
 
-# ================== RENDER PORT ==================
+# ================== APP START (RENDER) ==================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
