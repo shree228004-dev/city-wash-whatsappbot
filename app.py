@@ -4,50 +4,31 @@ import os
 
 app = Flask(__name__)
 
-# ================== META CREDENTIALS ==================
+# ================== CONFIG ==================
+VERIFY_TOKEN = "citywash123"
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
-VERIFY_TOKEN = "citywash123"  # Must match Meta dashboard
 
-# ================== BOT MESSAGES ==================
-CITY_WASH = {
-    "welcome": (
-        "👋 Welcome to *City Wash Laundry Services*!\n\n"
-        "We provide fast, affordable & eco-friendly laundry services 🧺✨\n\n"
-        "Reply with:\n"
-        "📍 Location\n"
-        "☎ Contact\n"
-        "⏰ Timings"
-    ),
-    "location": (
-        "📍 *City Wash Laundry Services*\n"
-        "No. 9, Thendral Nagar,\n"
-        "Sathuvachari, Vellore – 632009\n\n"
-        "🔗 https://maps.google.com/?q=City+Wash+Laundry+Services+Vellore"
-    ),
-    "contact": (
-        "☎ *Contact Us*\n"
-        "+91 81898 00888\n"
-        "+91 8189822888"
-    ),
-    "timings": (
-        "⏰ *Service Timings*\n\n"
-        "🚚 Pick-up & Delivery:\n"
-        "10:00 AM – 9:00 PM (All 7 days)\n\n"
-        "📞 Customer Support:\n"
-        "24×7 Available"
-    )
-}
-
-# ================== HOME ROUTE ==================
+# ================== HOME ==================
 @app.route("/", methods=["GET"])
 def home():
     return "City Wash WhatsApp Bot is running ✅", 200
 
+# ================== WEBHOOK VERIFY ==================
+@app.route("/webhook", methods=["GET"])
+def verify():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
 
-# ================== SEND MESSAGE FUNCTION ==================
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+
+    return "Forbidden", 403
+
+# ================== SEND MESSAGE ==================
 def send_message(to, text):
-    url = f"https://graph.facebook.com/v24.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -58,62 +39,54 @@ def send_message(to, text):
         "type": "text",
         "text": {"body": text}
     }
+    requests.post(url, headers=headers, json=payload)
 
-    response = requests.post(url, headers=headers, json=payload)
-    print("SEND MESSAGE STATUS:", response.status_code)
-    print("SEND MESSAGE RESPONSE:", response.text)
-
-
-# ================== WEBHOOK VERIFICATION ==================
-@app.route("/webhook", methods=["GET"])
-def verify_webhook():
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if token == VERIFY_TOKEN:
-        return challenge, 200
-
-    return "Verification failed", 403
-
-
-# ================== WEBHOOK MESSAGE HANDLER ==================
+# ================== WEBHOOK RECEIVE ==================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    print("FULL WEBHOOK DATA:", data)
+    print("INCOMING:", data)
 
     try:
         value = data["entry"][0]["changes"][0]["value"]
 
-        # Ignore delivery/read status events
         if "messages" not in value:
             return "ok", 200
 
         message = value["messages"][0]
-        user_text = message["text"]["body"].lower()
-        user_number = message["from"]
+        sender = message["from"]
+        text = message["text"]["body"].lower()
 
-        if "hi" in user_text or "hello" in user_text:
-            reply = CITY_WASH["welcome"]
-        elif "location" in user_text:
-            reply = CITY_WASH["location"]
-        elif "contact" in user_text or "phone" in user_text:
-            reply = CITY_WASH["contact"]
-        elif "time" in user_text or "timing" in user_text:
-            reply = CITY_WASH["timings"]
+        if "hi" in text or "hello" in text:
+            reply = (
+                "👋 Welcome to *City Wash Laundry Services*!\n\n"
+                "Reply with:\n"
+                "📍 Location\n"
+                "☎ Contact\n"
+                "⏰ Timings"
+            )
+        elif "location" in text:
+            reply = (
+                "📍 *City Wash Laundry Services*\n"
+                "No. 9, Thendral Nagar,\n"
+                "Sathuvachari, Vellore – 632009\n"
+                "https://maps.google.com/?q=City+Wash+Laundry+Services+Vellore"
+            )
+        elif "contact" in text:
+            reply = "☎ +91 81898 00888\n☎ +91 81898 22888"
+        elif "time" in text or "timing" in text:
+            reply = "⏰ 10:00 AM – 9:00 PM (All 7 days)"
         else:
             reply = "❓ Please reply with *Location*, *Contact*, or *Timings*."
 
-        send_message(user_number, reply)
+        send_message(sender, reply)
 
     except Exception as e:
-        print("WEBHOOK ERROR:", e)
+        print("ERROR:", e)
 
     return "ok", 200
 
-
-# ================== RENDER PORT CONFIG ==================
+# ================== RUN ==================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
