@@ -4,11 +4,12 @@ import os
 
 app = Flask(__name__)
 
-# Meta credentials (from Render environment variables)
+# ================== META CREDENTIALS ==================
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID")
-VERIFY_TOKEN = "citywash123"
+VERIFY_TOKEN = "citywash123"  # Must match Meta dashboard
 
+# ================== BOT MESSAGES ==================
 CITY_WASH = {
     "welcome": (
         "👋 Welcome to *City Wash Laundry Services*!\n\n"
@@ -38,14 +39,15 @@ CITY_WASH = {
     )
 }
 
-# ---------- HOME ROUTE ----------
+# ================== HOME ROUTE ==================
 @app.route("/", methods=["GET"])
 def home():
     return "City Wash WhatsApp Bot is running ✅", 200
 
 
+# ================== SEND MESSAGE FUNCTION ==================
 def send_message(to, text):
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = f"https://graph.facebook.com/v24.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/json"
@@ -56,27 +58,38 @@ def send_message(to, text):
         "type": "text",
         "text": {"body": text}
     }
-    requests.post(url, headers=headers, json=payload)
+
+    response = requests.post(url, headers=headers, json=payload)
+    print("SEND MESSAGE STATUS:", response.status_code)
+    print("SEND MESSAGE RESPONSE:", response.text)
 
 
-# ---------- WEBHOOK VERIFICATION ----------
+# ================== WEBHOOK VERIFICATION ==================
 @app.route("/webhook", methods=["GET"])
-def verify():
+def verify_webhook():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if token == VERIFY_TOKEN:
         return challenge, 200
+
     return "Verification failed", 403
 
 
-# ---------- WEBHOOK MESSAGE HANDLER ----------
+# ================== WEBHOOK MESSAGE HANDLER ==================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
+    print("FULL WEBHOOK DATA:", data)
 
     try:
-        message = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        value = data["entry"][0]["changes"][0]["value"]
+
+        # Ignore delivery/read status events
+        if "messages" not in value:
+            return "ok", 200
+
+        message = value["messages"][0]
         user_text = message["text"]["body"].lower()
         user_number = message["from"]
 
@@ -94,12 +107,12 @@ def webhook():
         send_message(user_number, reply)
 
     except Exception as e:
-        print("Webhook error:", e)
+        print("WEBHOOK ERROR:", e)
 
     return "ok", 200
 
 
-# ---------- RENDER PORT CONFIG ----------
+# ================== RENDER PORT CONFIG ==================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
