@@ -38,6 +38,12 @@ CITY_WASH = {
     )
 }
 
+# ---------- HOME ROUTE ----------
+@app.route("/", methods=["GET"])
+def home():
+    return "City Wash WhatsApp Bot is running ✅", 200
+
+
 def send_message(to, text):
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -52,15 +58,19 @@ def send_message(to, text):
     }
     requests.post(url, headers=headers, json=payload)
 
+
+# ---------- WEBHOOK VERIFICATION ----------
 @app.route("/webhook", methods=["GET"])
 def verify():
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if token == VERIFY_TOKEN:
-        return challenge
+        return challenge, 200
     return "Verification failed", 403
 
+
+# ---------- WEBHOOK MESSAGE HANDLER ----------
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
@@ -84,10 +94,13 @@ def webhook():
         send_message(user_number, reply)
 
     except Exception as e:
-        print("Error:", e)
+        print("Webhook error:", e)
 
     return "ok", 200
 
+
+# ---------- RENDER PORT CONFIG ----------
 if __name__ == "__main__":
-    app.run()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
